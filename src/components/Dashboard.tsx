@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { TasksTable } from './TasksTable';
-import { ClientsPanel } from './ClientsPanel';
 import { LogOut } from 'lucide-react';
 
 interface SummaryCard {
@@ -14,6 +13,8 @@ interface SummaryCard {
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState('home');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedClientName, setSelectedClientName] = useState<string | null>(null);
   const [summaryCards, setSummaryCards] = useState<SummaryCard[]>([
     { label: 'Tasks To Do', count: 0, color: 'bg-blue-50' },
     { label: 'Tasks Completed', count: 0, color: 'bg-green-50' },
@@ -55,9 +56,14 @@ export function Dashboard() {
     await supabase.auth.signOut();
   };
 
+  const handleCategorySelect = (categoryId: string, clientName: string) => {
+    setSelectedCategoryId(categoryId);
+    setSelectedClientName(clientName);
+  };
+
   return (
     <div className="flex h-screen bg-slate-50">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onCategorySelect={handleCategorySelect} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-8 py-4 bg-white border-b border-blue-100">
@@ -77,7 +83,7 @@ export function Dashboard() {
               <div className="space-y-8">
                 <Header summaryCards={summaryCards} />
                 <div className="px-8 pb-8">
-                  <TasksTable />
+                  <TasksTable selectedCategoryId={selectedCategoryId} selectedClientName={selectedClientName} />
                 </div>
               </div>
             )}
@@ -110,8 +116,6 @@ export function Dashboard() {
               </div>
             )}
           </div>
-
-          <ClientsPanel />
         </div>
       </div>
     </div>

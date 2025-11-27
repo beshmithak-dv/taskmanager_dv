@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, Circle, AlertCircle } from 'lucide-react';
+import { CheckCircle, Circle, AlertCircle, Plus } from 'lucide-react';
 
 interface Task {
   id: string;
@@ -9,44 +9,69 @@ interface Task {
   status: 'pending' | 'in-progress' | 'completed';
 }
 
-export function TasksTable() {
+interface TasksTableProps {
+  selectedCategoryId?: string | null;
+  selectedClientName?: string | null;
+}
+
+export function TasksTable({ selectedCategoryId, selectedClientName }: TasksTableProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTask, setNewTask] = useState({ title: '', assignee: '', status: 'pending' });
 
   useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('id, title, assignee, status')
-          .order('created_at', { ascending: false })
-          .limit(2);
-
-        if (error) throw error;
-        setTasks(data || []);
-      } catch (err) {
-        console.error('Error fetching tasks:', err);
-        setTasks([
-          {
-            id: '1',
-            title: 'Boost Weekly',
-            assignee: 'Vikram Durga',
-            status: 'in-progress',
-          },
-          {
-            id: '2',
-            title: 'SQR',
-            assignee: 'Vikram Durga',
-            status: 'completed',
-          },
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchTasks();
-  }, []);
+  }, [selectedCategoryId]);
+
+  const fetchTasks = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, title, assignee, status')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTasks(data || []);
+    } catch (err) {
+      console.error('Error fetching tasks:', err);
+      setTasks([
+        {
+          id: '1',
+          title: 'Boost Weekly',
+          assignee: 'Vikram',
+          status: 'in-progress',
+        },
+        {
+          id: '2',
+          title: 'SQR',
+          assignee: 'Durga',
+          status: 'completed',
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addTask = async () => {
+    if (!newTask.title.trim()) return;
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .insert([newTask]);
+
+      if (error) throw error;
+
+      setNewTask({ title: '', assignee: '', status: 'pending' });
+      setIsAddingTask(false);
+      await fetchTasks();
+    } catch (err) {
+      console.error('Error adding task:', err);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -75,10 +100,78 @@ export function TasksTable() {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-blue-100">
-      <div className="p-6 border-b border-blue-100">
-        <h2 className="text-lg font-bold text-slate-900">My Tasks</h2>
+    <div className="bg-white rounded-xl border border-blue-100 shadow-sm">
+      <div className="p-6 border-b border-blue-100 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">My Tasks</h2>
+          {selectedClientName && (
+            <p className="text-sm text-slate-500 mt-1">{selectedClientName}</p>
+          )}
+        </div>
+        <button
+          onClick={() => setIsAddingTask(!isAddingTask)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+        >
+          <Plus className="w-4 h-4" />
+          Add Task
+        </button>
       </div>
+
+      {isAddingTask && (
+        <div className="px-6 py-4 border-b border-blue-100 bg-slate-50 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Task Name</label>
+            <input
+              type="text"
+              value={newTask.title}
+              onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+              placeholder="Enter task name"
+              className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Assignee</label>
+              <input
+                type="text"
+                value={newTask.assignee}
+                onChange={(e) => setNewTask({ ...newTask, assignee: e.target.value })}
+                placeholder="Name"
+                className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
+              <select
+                value={newTask.status}
+                onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
+                className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="pending">Pending</option>
+                <option value="in-progress">In-Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={addTask}
+              className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium"
+            >
+              Save Task
+            </button>
+            <button
+              onClick={() => {
+                setIsAddingTask(false);
+                setNewTask({ title: '', assignee: '', status: 'pending' });
+              }}
+              className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 text-sm rounded-lg hover:bg-slate-300 font-medium"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full">
