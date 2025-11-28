@@ -4,70 +4,121 @@ import { CheckCircle, Circle, AlertCircle, Plus } from 'lucide-react';
 
 interface Task {
   id: string;
-  title: string;
+  name: string;
+  description: string;
   assignee: string;
-  status: 'pending' | 'in-progress' | 'completed';
+  status: 'Pending' | 'In-Progress' | 'Completed';
+  client_id: string;
+  category: string;
+}
+
+interface Client {
+  id: string;
+  name: string;
 }
 
 interface TasksTableProps {
-  selectedCategoryId?: string | null;
+  selectedClientId?: string | null;
+  selectedCategory?: string | null;
   selectedClientName?: string | null;
+  onTasksUpdated?: () => void;
 }
 
-export function TasksTable({ selectedCategoryId, selectedClientName }: TasksTableProps) {
+export function TasksTable({ selectedClientId, selectedCategory, selectedClientName, onTasksUpdated }: TasksTableProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddingTask, setIsAddingTask] = useState(false);
-  const [newTask, setNewTask] = useState({ title: '', assignee: '', status: 'pending' });
+  const [clients, setClients] = useState<Client[]>([]);
+  const [newTask, setNewTask] = useState({
+    name: '',
+    description: '',
+    assignee: '',
+    status: 'Pending' as 'Pending' | 'In-Progress' | 'Completed',
+    client_id: '',
+    category: 'tasks' as 'tasks' | 'gtm' | 'recurring',
+  });
 
   useEffect(() => {
     fetchTasks();
-  }, [selectedCategoryId]);
+    fetchClients();
+  }, [selectedClientId, selectedCategory]);
+
+  const fetchClients = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setClients(data || []);
+    } catch (err) {
+      console.error('Error fetching clients:', err);
+    }
+  };
 
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('tasks')
-        .select('id, title, assignee, status')
+        .select('id, name, description, assignee, status, client_id, category')
         .order('created_at', { ascending: false });
+
+      if (selectedClientId && selectedCategory) {
+        query = query
+          .eq('client_id', selectedClientId)
+          .eq('category', selectedCategory);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setTasks(data || []);
     } catch (err) {
       console.error('Error fetching tasks:', err);
-      setTasks([
-        {
-          id: '1',
-          title: 'Boost Weekly',
-          assignee: 'Vikram',
-          status: 'in-progress',
-        },
-        {
-          id: '2',
-          title: 'SQR',
-          assignee: 'Durga',
-          status: 'completed',
-        },
-      ]);
+      setTasks([]);
     } finally {
       setLoading(false);
     }
   };
 
   const addTask = async () => {
-    if (!newTask.title.trim()) return;
+    if (!newTask.name.trim()) return;
+    if (!newTask.client_id) {
+      alert('Please select a client');
+      return;
+    }
 
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
       const { error } = await supabase
         .from('tasks')
-        .insert([newTask]);
+        .insert([{
+          user_id: userData.user.id,
+          client_id: newTask.client_id,
+          category: newTask.category,
+          name: newTask.name,
+          description: newTask.description,
+          assignee: newTask.assignee,
+          status: newTask.status,
+        }]);
 
       if (error) throw error;
 
-      setNewTask({ title: '', assignee: '', status: 'pending' });
+      setNewTask({
+        name: '',
+        description: '',
+        assignee: '',
+        status: 'Pending',
+        client_id: '',
+        category: 'tasks',
+      });
       setIsAddingTask(false);
       await fetchTasks();
+      onTasksUpdated?.();
     } catch (err) {
       console.error('Error adding task:', err);
     }
@@ -75,14 +126,14 @@ export function TasksTable({ selectedCategoryId, selectedClientName }: TasksTabl
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'Completed':
         return (
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-700">
             <CheckCircle className="w-4 h-4" />
             Completed
           </span>
         );
-      case 'in-progress':
+      case 'In-Progress':
         return (
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700">
             <Circle className="w-4 h-4" />
@@ -123,11 +174,50 @@ export function TasksTable({ selectedCategoryId, selectedClientName }: TasksTabl
             <label className="block text-xs font-medium text-slate-700 mb-1">Task Name</label>
             <input
               type="text"
-              value={newTask.title}
-              onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+              value={newTask.name}
+              onChange={(e) => setNewTask({ ...newTask, name: e.target.value })}
               placeholder="Enter task name"
               className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Description</label>
+            <textarea
+              value={newTask.description}
+              onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+              placeholder="Enter task description"
+              rows={2}
+              className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Client</label>
+              <select
+                value={newTask.client_id}
+                onChange={(e) => setNewTask({ ...newTask, client_id: e.target.value })}
+                className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Client</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Category</label>
+              <select
+                value={newTask.category}
+                onChange={(e) => setNewTask({ ...newTask, category: e.target.value as 'tasks' | 'gtm' | 'recurring' })}
+                className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="tasks">Tasks</option>
+                <option value="gtm">GTM</option>
+                <option value="recurring">Recurring</option>
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -144,12 +234,12 @@ export function TasksTable({ selectedCategoryId, selectedClientName }: TasksTabl
               <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
               <select
                 value={newTask.status}
-                onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
+                onChange={(e) => setNewTask({ ...newTask, status: e.target.value as 'Pending' | 'In-Progress' | 'Completed' })}
                 className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="pending">Pending</option>
-                <option value="in-progress">In-Progress</option>
-                <option value="completed">Completed</option>
+                <option value="Pending">Pending</option>
+                <option value="In-Progress">In-Progress</option>
+                <option value="Completed">Completed</option>
               </select>
             </div>
           </div>
@@ -163,7 +253,14 @@ export function TasksTable({ selectedCategoryId, selectedClientName }: TasksTabl
             <button
               onClick={() => {
                 setIsAddingTask(false);
-                setNewTask({ title: '', assignee: '', status: 'pending' });
+                setNewTask({
+                  name: '',
+                  description: '',
+                  assignee: '',
+                  status: 'Pending',
+                  client_id: '',
+                  category: 'tasks',
+                });
               }}
               className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 text-sm rounded-lg hover:bg-slate-300 font-medium"
             >
@@ -205,7 +302,7 @@ export function TasksTable({ selectedCategoryId, selectedClientName }: TasksTabl
               tasks.map((task) => (
                 <tr key={task.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                    {task.title}
+                    {task.name}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-700">{task.assignee}</td>
                   <td className="px-6 py-4">{getStatusBadge(task.status)}</td>

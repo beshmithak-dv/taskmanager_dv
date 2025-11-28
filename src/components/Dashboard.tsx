@@ -13,13 +13,15 @@ interface SummaryCard {
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState('home');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedClientName, setSelectedClientName] = useState<string | null>(null);
   const [summaryCards, setSummaryCards] = useState<SummaryCard[]>([
     { label: 'Tasks To Do', count: 0, color: 'bg-blue-50' },
     { label: 'Tasks Completed', count: 0, color: 'bg-green-50' },
     { label: 'Tasks In-Progress', count: 0, color: 'bg-orange-50' },
   ]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     const fetchTaskStats = async () => {
@@ -32,9 +34,9 @@ export function Dashboard() {
 
         const tasks = data || [];
         const stats = {
-          pending: tasks.filter((t) => t.status === 'pending').length,
-          completed: tasks.filter((t) => t.status === 'completed').length,
-          inProgress: tasks.filter((t) => t.status === 'in-progress').length,
+          pending: tasks.filter((t) => t.status === 'Pending').length,
+          completed: tasks.filter((t) => t.status === 'Completed').length,
+          inProgress: tasks.filter((t) => t.status === 'In-Progress').length,
         };
 
         setSummaryCards([
@@ -50,15 +52,20 @@ export function Dashboard() {
     if (activeTab === 'home') {
       fetchTaskStats();
     }
-  }, [activeTab]);
+  }, [activeTab, refreshTrigger]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
 
-  const handleCategorySelect = (categoryId: string, clientName: string) => {
-    setSelectedCategoryId(categoryId);
+  const handleCategorySelect = (clientId: string, category: string, clientName: string) => {
+    setSelectedClientId(clientId);
+    setSelectedCategory(category);
     setSelectedClientName(clientName);
+  };
+
+  const handleTasksUpdated = () => {
+    setRefreshTrigger(prev => prev + 1);
   };
 
   return (
@@ -83,7 +90,12 @@ export function Dashboard() {
               <div className="space-y-8">
                 <Header summaryCards={summaryCards} />
                 <div className="px-8 pb-8">
-                  <TasksTable selectedCategoryId={selectedCategoryId} selectedClientName={selectedClientName} />
+                  <TasksTable
+                    selectedClientId={selectedClientId}
+                    selectedCategory={selectedCategory}
+                    selectedClientName={selectedClientName}
+                    onTasksUpdated={handleTasksUpdated}
+                  />
                 </div>
               </div>
             )}

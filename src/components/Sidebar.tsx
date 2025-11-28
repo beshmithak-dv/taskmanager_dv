@@ -18,7 +18,7 @@ interface Client {
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onCategorySelect?: (categoryId: string, clientName: string) => void;
+  onCategorySelect?: (clientId: string, category: string, clientName: string) => void;
 }
 
 export function Sidebar({ activeTab, onTabChange, onCategorySelect }: SidebarProps) {
@@ -53,23 +53,29 @@ export function Sidebar({ activeTab, onTabChange, onCategorySelect }: SidebarPro
       const clientsWithCategories: Client[] = [];
 
       for (const client of clientsData) {
-        const { data: categoriesData, error: categoriesError } = await supabase
-          .from('task_categories')
-          .select('id, name')
+        const { data: tasksCount, error: tasksError } = await supabase
+          .from('tasks')
+          .select('category', { count: 'exact', head: false })
           .eq('client_id', client.id);
 
-        if (categoriesError) throw categoriesError;
+        if (tasksError) throw tasksError;
 
-        const defaultCategories = [
-          { id: `tasks-${client.id}`, name: 'Tasks', taskCount: 0 },
-          { id: `gtm-${client.id}`, name: 'GTM Tasks', taskCount: 0 },
-          { id: `recurring-${client.id}`, name: 'Recurring Tasks', taskCount: 0 },
+        const counts = {
+          tasks: tasksCount?.filter(t => t.category === 'tasks').length || 0,
+          gtm: tasksCount?.filter(t => t.category === 'gtm').length || 0,
+          recurring: tasksCount?.filter(t => t.category === 'recurring').length || 0,
+        };
+
+        const categories = [
+          { id: 'tasks', name: 'Tasks', taskCount: counts.tasks },
+          { id: 'gtm', name: 'GTM Tasks', taskCount: counts.gtm },
+          { id: 'recurring', name: 'Recurring Tasks', taskCount: counts.recurring },
         ];
 
         clientsWithCategories.push({
           id: client.id,
           name: client.name,
-          categories: defaultCategories,
+          categories,
           isExpanded: false,
         });
       }
@@ -94,9 +100,12 @@ export function Sidebar({ activeTab, onTabChange, onCategorySelect }: SidebarPro
     if (!newClientName.trim()) return;
 
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
       const { error } = await supabase
         .from('clients')
-        .insert([{ name: newClientName }]);
+        .insert([{ name: newClientName, user_id: userData.user.id }]);
 
       if (error) throw error;
 
@@ -218,7 +227,7 @@ export function Sidebar({ activeTab, onTabChange, onCategorySelect }: SidebarPro
                     {client.categories.map((category) => (
                       <button
                         key={category.id}
-                        onClick={() => onCategorySelect?.(category.id, client.name)}
+                        onClick={() => onCategorySelect?.(client.id, category.id, client.name)}
                         className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-between"
                       >
                         <span className="truncate">{category.name}</span>
