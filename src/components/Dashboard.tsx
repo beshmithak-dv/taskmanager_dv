@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { TasksTable } from './TasksTable';
+import { InboxPage } from './InboxPage';
+import { TasksPage } from './TasksPage';
 import { LogOut } from 'lucide-react';
 
 interface SummaryCard {
@@ -101,17 +103,11 @@ export function Dashboard() {
             )}
 
             {activeTab === 'inbox' && (
-              <div className="p-8">
-                <h1 className="text-3xl font-bold text-slate-900">Inbox</h1>
-                <p className="mt-4 text-slate-600">Coming soon...</p>
-              </div>
+              <InboxPage onTasksUpdated={handleTasksUpdated} />
             )}
 
             {activeTab === 'tasks' && (
-              <div className="p-8">
-                <h1 className="text-3xl font-bold text-slate-900">Tasks</h1>
-                <p className="mt-4 text-slate-600">Coming soon...</p>
-              </div>
+              <TasksPage onTasksUpdated={handleTasksUpdated} />
             )}
 
             {activeTab === 'chats' && (

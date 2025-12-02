@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, Circle, AlertCircle, Plus } from 'lucide-react';
+import { CheckCircle, Circle, AlertCircle, Plus, Calendar } from 'lucide-react';
+import { TaskDetails } from './TaskDetails';
 
 interface Task {
   id: string;
@@ -10,6 +11,7 @@ interface Task {
   status: 'Pending' | 'In-Progress' | 'Completed';
   client_id: string;
   category: string;
+  due_date: string | null;
 }
 
 interface Client {
@@ -29,6 +31,7 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
   const [loading, setLoading] = useState(true);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [newTask, setNewTask] = useState({
     name: '',
     description: '',
@@ -62,7 +65,7 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
       setLoading(true);
       let query = supabase
         .from('tasks')
-        .select('id, name, description, assignee, status, client_id, category')
+        .select('id, name, description, assignee, status, client_id, category, due_date')
         .order('created_at', { ascending: false });
 
       if (selectedClientId && selectedCategory) {
@@ -124,6 +127,15 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
     }
   };
 
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'No due date';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Completed':
@@ -148,6 +160,19 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
           </span>
         );
     }
+  };
+
+  const handleTaskClick = (taskId: string) => {
+    setSelectedTaskId(taskId);
+  };
+
+  const handleCloseDetails = () => {
+    setSelectedTaskId(null);
+  };
+
+  const handleTaskUpdate = () => {
+    fetchTasks();
+    onTasksUpdated?.();
   };
 
   return (
@@ -281,6 +306,9 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
                 Assignee
               </th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">
+                Due Date
+              </th>
+              <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">
                 Status
               </th>
             </tr>
@@ -288,23 +316,33 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
           <tbody className="divide-y divide-blue-100">
             {loading ? (
               <tr>
-                <td colSpan={3} className="px-6 py-8 text-center text-slate-500">
+                <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
                   Loading tasks...
                 </td>
               </tr>
             ) : tasks.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-6 py-8 text-center text-slate-500">
+                <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
                   No tasks yet
                 </td>
               </tr>
             ) : (
               tasks.map((task) => (
-                <tr key={task.id} className="hover:bg-slate-50 transition-colors">
+                <tr
+                  key={task.id}
+                  onClick={() => handleTaskClick(task.id)}
+                  className="hover:bg-slate-50 transition-colors cursor-pointer"
+                >
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">
                     {task.name}
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-700">{task.assignee}</td>
+                  <td className="px-6 py-4 text-sm text-slate-700">{task.assignee || 'Unassigned'}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-700">{formatDate(task.due_date)}</span>
+                    </div>
+                  </td>
                   <td className="px-6 py-4">{getStatusBadge(task.status)}</td>
                 </tr>
               ))
@@ -312,6 +350,14 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
           </tbody>
         </table>
       </div>
+
+      {selectedTaskId && (
+        <TaskDetails
+          taskId={selectedTaskId}
+          onClose={handleCloseDetails}
+          onUpdate={handleTaskUpdate}
+        />
+      )}
     </div>
   );
 }
