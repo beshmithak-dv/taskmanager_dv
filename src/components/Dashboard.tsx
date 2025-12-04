@@ -5,6 +5,7 @@ import { Header } from './Header';
 import { TasksTable } from './TasksTable';
 import { InboxPage } from './InboxPage';
 import { TasksPage } from './TasksPage';
+import { CalendarPage } from './CalendarPage';
 import { LogOut } from 'lucide-react';
 
 interface SummaryCard {
@@ -118,10 +119,7 @@ export function Dashboard() {
             )}
 
             {activeTab === 'calendar' && (
-              <div className="p-8">
-                <h1 className="text-3xl font-bold text-slate-900">Calendar</h1>
-                <p className="mt-4 text-slate-600">Coming soon...</p>
-              </div>
+              <CalendarPage />
             )}
           </div>
         </div>
