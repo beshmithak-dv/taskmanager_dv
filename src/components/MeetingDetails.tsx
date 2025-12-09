@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Calendar, Clock, FileText, Edit2, Trash2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { updateCalendarEvent, deleteCalendarEvent } from '../lib/googleCalendar';
 
 interface Meeting {
   id: string;
@@ -9,6 +9,7 @@ interface Meeting {
   date: string;
   time: string;
   created_at: string;
+  google_event_id?: string | null;
 }
 
 interface MeetingDetailsProps {
@@ -43,17 +44,16 @@ export function MeetingDetails({ meeting, onClose, onUpdate, onDelete }: Meeting
       setSaving(true);
       setError('');
 
-      const { error: updateError } = await supabase
-        .from('meetings')
-        .update({
-          title: title.trim(),
-          description: description.trim(),
-          date,
-          time: time.trim(),
-        })
-        .eq('id', meeting.id);
+      const updatedEvent = await updateCalendarEvent(meeting.id, {
+        title: title.trim(),
+        description: description.trim(),
+        date,
+        time: time.trim(),
+      });
 
-      if (updateError) throw updateError;
+      if (!updatedEvent) {
+        throw new Error('Failed to update event');
+      }
 
       setIsEditing(false);
       onUpdate();
@@ -74,12 +74,11 @@ export function MeetingDetails({ meeting, onClose, onUpdate, onDelete }: Meeting
       setDeleting(true);
       setError('');
 
-      const { error: deleteError } = await supabase
-        .from('meetings')
-        .delete()
-        .eq('id', meeting.id);
+      const success = await deleteCalendarEvent(meeting.id);
 
-      if (deleteError) throw deleteError;
+      if (!success) {
+        throw new Error('Failed to delete event');
+      }
 
       onDelete();
     } catch (err: any) {

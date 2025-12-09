@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { listCalendarEvents, CalendarEvent } from '../lib/googleCalendar';
 import { MeetingModal } from './MeetingModal';
 import { MeetingDetails } from './MeetingDetails';
 
@@ -11,6 +12,7 @@ interface Meeting {
   date: string;
   time: string;
   created_at: string;
+  google_event_id?: string | null;
 }
 
 const INDIA_HOLIDAYS_2026 = [
@@ -44,13 +46,33 @@ export function CalendarPage() {
   const fetchMeetings = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('meetings')
-        .select('*')
-        .order('date', { ascending: true });
 
-      if (error) throw error;
-      setMeetings(data || []);
+      const [oldMeetings, calendarEvents] = await Promise.all([
+        supabase.from('meetings').select('*').order('date', { ascending: true }),
+        listCalendarEvents()
+      ]);
+
+      const allMeetings: Meeting[] = [];
+
+      if (oldMeetings.data) {
+        allMeetings.push(...oldMeetings.data);
+      }
+
+      if (calendarEvents) {
+        allMeetings.push(...calendarEvents.map(event => ({
+          id: event.id || '',
+          title: event.title,
+          description: event.description,
+          date: event.date,
+          time: event.time,
+          created_at: event.created_at || '',
+          google_event_id: event.google_event_id
+        })));
+      }
+
+      allMeetings.sort((a, b) => a.date.localeCompare(b.date));
+
+      setMeetings(allMeetings);
     } catch (err) {
       console.error('Error fetching meetings:', err);
     } finally {

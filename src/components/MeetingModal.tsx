@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Calendar, Clock, FileText } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { createCalendarEvent } from '../lib/googleCalendar';
 
 interface MeetingModalProps {
   onClose: () => void;
@@ -37,23 +37,16 @@ export function MeetingModal({ onClose, onSave, preselectedDate }: MeetingModalP
       setSaving(true);
       setError('');
 
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        setError('You must be logged in to create a meeting');
-        return;
+      const event = await createCalendarEvent({
+        title: title.trim(),
+        description: description.trim(),
+        date,
+        time: time.trim(),
+      });
+
+      if (!event) {
+        throw new Error('Failed to create event');
       }
-
-      const { error: insertError } = await supabase
-        .from('meetings')
-        .insert([{
-          user_id: userData.user.id,
-          title: title.trim(),
-          description: description.trim(),
-          date,
-          time: time.trim(),
-        }]);
-
-      if (insertError) throw insertError;
 
       onSave();
     } catch (err: any) {
