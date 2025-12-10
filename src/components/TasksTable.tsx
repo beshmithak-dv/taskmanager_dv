@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, Circle, AlertCircle, Plus, Calendar } from 'lucide-react';
+import { CheckCircle, Circle, AlertCircle, Plus, Calendar, MoreVertical, Paperclip, Flag, User } from 'lucide-react';
 import { TaskDetails } from './TaskDetails';
 
 interface Task {
@@ -12,6 +12,9 @@ interface Task {
   client_id: string;
   category: string;
   due_date: string | null;
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  created_at: string;
+  attachment_count?: number;
 }
 
 interface Client {
@@ -65,7 +68,7 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
       setLoading(true);
       let query = supabase
         .from('tasks')
-        .select('id, name, description, assignee, status, client_id, category, due_date')
+        .select('id, name, description, assignee, status, client_id, category, due_date, priority, created_at')
         .order('created_at', { ascending: false });
 
       if (selectedClientId && selectedCategory) {
@@ -77,7 +80,22 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
       const { data, error } = await query;
 
       if (error) throw error;
-      setTasks(data || []);
+
+      const tasksWithAttachments = await Promise.all(
+        (data || []).map(async (task) => {
+          const { count } = await supabase
+            .from('task_attachments')
+            .select('*', { count: 'exact', head: true })
+            .eq('task_id', task.id);
+
+          return {
+            ...task,
+            attachment_count: count || 0,
+          };
+        })
+      );
+
+      setTasks(tasksWithAttachments);
     } catch (err) {
       console.error('Error fetching tasks:', err);
       setTasks([]);
@@ -136,30 +154,45 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
     });
   };
 
+  const getStatusDotColor = (status: string) => {
+    switch (status) {
+      case 'Completed':
+        return 'bg-green-500';
+      case 'In-Progress':
+        return 'bg-blue-500';
+      default:
+        return 'bg-red-500';
+    }
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'Urgent':
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'High':
+        return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'Medium':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Completed':
-        return (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-700">
-            <CheckCircle className="w-4 h-4" />
-            Completed
-          </span>
-        );
+        return 'bg-green-100 text-green-700 border-green-200';
       case 'In-Progress':
-        return (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700">
-            <Circle className="w-4 h-4" />
-            In-Progress
-          </span>
-        );
+        return 'bg-blue-100 text-blue-700 border-blue-200';
       default:
-        return (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-slate-50 text-slate-700">
-            <AlertCircle className="w-4 h-4" />
-            Pending
-          </span>
-        );
+        return 'bg-slate-100 text-slate-700 border-slate-200';
     }
+  };
+
+  const truncateDescription = (text: string, maxLength: number = 120) => {
+    if (!text) return 'No description';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
   };
 
   const handleTaskClick = (taskId: string) => {
@@ -295,60 +328,91 @@ export function TasksTable({ selectedClientId, selectedCategory, selectedClientN
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b border-blue-100">
-            <tr>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">
-                Task Name
-              </th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">
-                Assignee
-              </th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">
-                Due Date
-              </th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">
-                Status
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-blue-100">
-            {loading ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                  Loading tasks...
-                </td>
-              </tr>
-            ) : tasks.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                  No tasks yet
-                </td>
-              </tr>
-            ) : (
-              tasks.map((task) => (
-                <tr
-                  key={task.id}
-                  onClick={() => handleTaskClick(task.id)}
-                  className="hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                    {task.name}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-700">{task.assignee || 'Unassigned'}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-slate-400" />
-                      <span className="text-slate-700">{formatDate(task.due_date)}</span>
+      <div className="p-6">
+        {loading ? (
+          <div className="text-center py-12">
+            <p className="text-slate-500">Loading tasks...</p>
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-slate-500">No tasks yet</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                onClick={() => handleTaskClick(task.id)}
+                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-start gap-4">
+                  <div className={`w-3 h-3 rounded-full ${getStatusDotColor(task.status)} flex-shrink-0 mt-1.5`} />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <h3 className="text-base font-semibold text-slate-900 leading-tight">
+                        {task.name}
+                      </h3>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="p-1 hover:bg-slate-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                      >
+                        <MoreVertical className="w-4 h-4 text-slate-600" />
+                      </button>
                     </div>
-                  </td>
-                  <td className="px-6 py-4">{getStatusBadge(task.status)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+
+                    <p className="text-sm text-slate-600 mb-4 leading-relaxed">
+                      {truncateDescription(task.description)}
+                    </p>
+
+                    {task.attachment_count && task.attachment_count > 0 && (
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200">
+                          <Paperclip className="w-3.5 h-3.5 text-slate-500" />
+                          <span className="text-xs text-slate-600 font-medium">
+                            {task.attachment_count} {task.attachment_count === 1 ? 'file' : 'files'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getPriorityBadge(task.priority)}`}>
+                        <Flag className="w-3 h-3" />
+                        {task.priority}
+                      </span>
+
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadge(task.status)}`}>
+                        {task.status === 'Completed' ? (
+                          <CheckCircle className="w-3 h-3" />
+                        ) : task.status === 'In-Progress' ? (
+                          <Circle className="w-3 h-3" />
+                        ) : (
+                          <AlertCircle className="w-3 h-3" />
+                        )}
+                        {task.status}
+                      </span>
+
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200">
+                        <Calendar className="w-3 h-3" />
+                        {formatDate(task.due_date)}
+                      </span>
+
+                      {task.assignee && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200">
+                          <User className="w-3 h-3" />
+                          {task.assignee}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {selectedTaskId && (
